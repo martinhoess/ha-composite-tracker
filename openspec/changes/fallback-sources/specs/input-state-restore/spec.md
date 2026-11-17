@@ -33,7 +33,7 @@ Die Composite SHALL für jeden GPS-Eingang die letzte gültige Position mit Gena
 #### Scenario: Neustart, während ein Lückenfüller führt
 - **WHEN** vor dem Neustart ein Lückenfüller geführt hat und das Telefon seit Stunden schweigt
 - **THEN** bleibt die Composite nach dem Start beim Lückenfüller; der beim Start vorhandene Zustand des Telefons ist keine neue Meldung
-- Beleg: `tests/test_restore.py::test_restart_while_car_leads`
+- Beleg: `tests/test_restore.py::test_restart_while_car_leads`, `tests/test_restore.py::test_restart_while_car_leads_phone_state_after_setup` (Telefon-Zustand kommt erst nach dem Setup der Composite, solange HA startet)
 
 #### Scenario: Altdaten ohne gespeicherten Stand
 - **WHEN** der gespeicherte Zustand aus einer Version ohne diese Daten stammt

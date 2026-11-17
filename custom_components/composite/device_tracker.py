@@ -42,6 +42,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import (
     Context,
+    CoreState,
     Event,
     EventStateChangedData,
     HomeAssistant,
@@ -660,7 +661,7 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
                 and not (
                     not entity.fallback
                     and self._fallback_leads
-                    and not self._initial_pass
+                    and self._takes_new_reports
                 )
             ):
                 dist = distance(gps[0], gps[1], old_data.gps[0], old_data.gps[1])
@@ -898,6 +899,15 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
 
         if driving or self._drive_ending_delayed:
             self._state_override = STATE_DRIVING
+
+    @property
+    def _takes_new_reports(self) -> bool:
+        """Return if input updates are new reports, not states set at startup.
+
+        While Home Assistant starts, integrations write restored or cached states
+        with a fresh last_updated; those are no news about where a device is.
+        """
+        return not self._initial_pass and self.hass.state is CoreState.running
 
     @property
     def _fallback_leads(self) -> bool:

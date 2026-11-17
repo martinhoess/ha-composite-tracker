@@ -5,7 +5,7 @@ from typing import Any
 from freezegun.api import FrozenDateTimeFactory
 
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import CoreState, HomeAssistant, State
 from homeassistant.helpers.restore_state import async_get as async_get_restore_state
 import homeassistant.util.dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -347,3 +347,38 @@ async def test_startup_order_phone_with_last_seen(
     await setup_composite(hass, fallback=[CAR], inputs=(CAR, PHONE))
 
     assert tracker(hass).attributes["last_entity_id"] == PHONE
+
+
+async def test_restart_while_car_leads_phone_state_after_setup(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Same, but the phone's integration writes its state after the composite.
+
+    Until Home Assistant runs, such states are no new reports.
+    """
+    now = dt_util.utcnow()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                composite_state(STATE_NOT_HOME, FAR, CAR, now - timedelta(minutes=10)),
+                {
+                    "inputs": {
+                        PHONE: saved_input(HOME, now - timedelta(hours=3)),
+                        CAR: saved_input(FAR, now - timedelta(minutes=10)),
+                    }
+                },
+            )
+        ],
+    )
+    hass.set_state(CoreState.not_running)
+    report(hass, CAR, FAR)
+    await setup_composite(hass, fallback=[CAR])
+    freezer.tick(timedelta(seconds=2))
+    report(hass, PHONE, HOME)
+    await hass.async_block_till_done()
+    hass.set_state(CoreState.running)
+
+    state = tracker(hass)
+    assert state.state == STATE_NOT_HOME
+    assert state.attributes["last_entity_id"] == CAR

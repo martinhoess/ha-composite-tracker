@@ -3,7 +3,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.setup import async_setup_component
 
-from .conftest import CAR, DOMAIN, HOME, PHONE, report, setup_composite
+from .conftest import CAR, DOMAIN, FAR, HOME, PHONE, report, setup_composite
 
 
 async def test_options_flow_fallback_step(hass: HomeAssistant) -> None:
@@ -38,6 +38,14 @@ async def test_options_flow_fallback_step(hass: HomeAssistant) -> None:
     fallback = {cfg["entity"]: cfg["fallback"] for cfg in entry.options["entity_id"]}
     assert fallback == {PHONE: False, CAR: True}
     assert entry.options["fallback_after"] == {"hours": 0, "minutes": 3, "seconds": 0}
+
+    # The running entity uses the new setting right away.
+    await hass.async_block_till_done()
+    report(hass, PHONE, HOME)
+    await hass.async_block_till_done()
+    report(hass, CAR, FAR)
+    await hass.async_block_till_done()
+    assert hass.states.get("device_tracker.test").attributes["last_entity_id"] == PHONE
 
 
 async def test_options_flow_fallback_step_suggests_current(

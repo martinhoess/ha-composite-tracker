@@ -28,12 +28,20 @@ Optionen des Forks dürfen Upstream nicht brechen. Der Kompatibilitätstest läu
 den Upstream-Tag, auf dem der Fork liegt (`<tag>`, derzeit `4.3.0`):
 
 ```
-W=$(mktemp -d) && git worktree add -q --detach "$W" <tag> && cp -r tests pyproject.toml "$W"/ \
-  && (cd "$W" && UV_PROJECT_ENVIRONMENT="$OLDPWD/.venv" uv run --no-sync pytest -q tests/test_upstream_compat.py); \
-  git worktree remove --force "$W"
+R=$PWD; W=$(mktemp -d) && git worktree add -q --detach "$W" <tag> && cp -r tests pyproject.toml "$W"/ \
+  && (cd "$W" && ! grep -q '"version": ".*\.1[0-9][0-9]"' custom_components/composite/manifest.json \
+      && UV_PROJECT_ENVIRONMENT="$R/.venv" uv run --no-sync pytest -q tests/test_upstream_compat.py); \
+  rc=$?; git worktree remove --force "$W"; (exit $rc)
 ```
 
-Erwartet: `1 passed`.
+Erwartet: `1 passed`, Exit 0. Die `grep`-Zeile sichert zu, dass im Worktree Upstream-Code liegt
+(keine Fork-Version `….1xx`). YAML mit `fallback` oder `fallback_after` lehnt Upstream ab: diese
+Schlüssel vor einem Rückweg aus der YAML-Konfiguration entfernen.
+
+## Nach dem Falten
+
+Wird der Branch in einen Commit auf `main` gefaltet, laufen Prüflauf, Rückweg und Versionsprüfung
+auf dem gefalteten Commit erneut, bevor getaggt wird.
 
 ## Version
 
@@ -51,8 +59,22 @@ Release = Tag `<version>` plus GitHub-Release im Fork. Installation über HACS a
 danach Neustart von Home Assistant. Der Schutz beim Neustart greift erst ab dem zweiten Neustart nach
 der Installation (beim ersten fehlen die gespeicherten Daten je Eingang).
 
+Der Schutz gilt nach einem sauberen Neustart. Nach einem Absturz gilt der letzte periodische Stand
+der Restore-Daten (bis 15 min alt).
+
 ## Live-Beleg
 
-Nach dem Ausrollen, mit einem Eingang als Lückenfüller, der außerhalb der Heimzone steht:
-zweimal neu starten, nach jedem Start bleibt die Person `home`, und `last_entity_id` der Composite
-zeigt nicht auf den Lückenfüller.
+Geprüft wird die Composite-Entität, nicht die Person. Ein Fahrzeug-Eingang steht unbewegt außerhalb
+der Heimzone, das Telefon liegt daheim.
+
+1. Ausrollen, Neustart 1 (noch ohne gespeicherte Daten, beweist nichts).
+2. Debug-Log für `custom_components.composite` einschalten.
+3. **Restore allein:** Fahrzeug vorübergehend *ohne* Lückenfüller-Häkchen. Vor Neustart 2 in
+   `.storage/core.restore_state` nachsehen, dass `extra_data.inputs.<fahrzeug>` mit der aktuellen
+   Position existiert; `gps_accuracy` und lat/lon des Fahrzeugs notieren. Neustart 2: Composite bleibt
+   `home`, `last_entity_id` ist nicht das Fahrzeug, im Log steht
+   `skipping update from <fahrzeug>: not enough movement`. Weichen lat/lon nach dem Start ab, ist das
+   im Bericht zu nennen (Fall nicht durch die Tests gedeckt).
+4. **Lückenfüller:** Häkchen wieder setzen, Neustart 3: Composite bleibt `home`.
+5. Melde-Takt: größte Lücke zwischen `last_updated`-Wechseln des Telefons über eine ruhige Stunde
+   daheim (Recorder) liegt unter `fallback_after`.
