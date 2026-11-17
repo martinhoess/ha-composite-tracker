@@ -20,6 +20,8 @@ from .const import (
     CONF_END_DRIVING_DELAY,
     CONF_ENTITY,
     CONF_ENTITY_PICTURE,
+    CONF_FALLBACK,
+    CONF_FALLBACK_AFTER,
     CONF_MAX_SPEED_AGE,
     CONF_REQ_MOVEMENT,
     CONF_SHOW_UNKNOWN_AS_0,
@@ -58,7 +60,12 @@ def _entities(entities: list[str | dict]) -> list[dict]:
             result.append(entity)
         else:
             result.append(
-                {CONF_ENTITY: entity, CONF_ALL_STATES: False, CONF_USE_PICTURE: False}
+                {
+                    CONF_ENTITY: entity,
+                    CONF_ALL_STATES: False,
+                    CONF_USE_PICTURE: False,
+                    CONF_FALLBACK: False,
+                }
             )
     return result
 
@@ -145,6 +152,7 @@ def _defaults(config: dict) -> dict:
     def_max_sa = config[CONF_DEFAULT_OPTIONS].get(CONF_MAX_SPEED_AGE)
     def_drv_sp = config[CONF_DEFAULT_OPTIONS].get(CONF_DRIVING_SPEED)
     def_end_dd = config[CONF_DEFAULT_OPTIONS].get(CONF_END_DRIVING_DELAY)
+    def_fb_aft = config[CONF_DEFAULT_OPTIONS].get(CONF_FALLBACK_AFTER)
     end_dd_but_no_drv_sp = False
     for tracker in config[CONF_TRACKERS]:
         if tracker.pop(CONF_TIME_AS, None):
@@ -158,6 +166,8 @@ def _defaults(config: dict) -> dict:
             tracker[CONF_DRIVING_SPEED] = def_drv_sp
         if CONF_END_DRIVING_DELAY not in tracker and def_end_dd is not None:
             tracker[CONF_END_DRIVING_DELAY] = def_end_dd
+        if CONF_FALLBACK_AFTER not in tracker and def_fb_aft is not None:
+            tracker[CONF_FALLBACK_AFTER] = def_fb_aft
         if CONF_END_DRIVING_DELAY in tracker and CONF_DRIVING_SPEED not in tracker:
             end_dd_but_no_drv_sp = True
 
@@ -188,6 +198,7 @@ _ENTITIES = vol.All(
                     vol.Required(CONF_ENTITY): cv.entity_id,
                     vol.Optional(CONF_ALL_STATES, default=False): cv.boolean,
                     vol.Optional(CONF_USE_PICTURE, default=False): cv.boolean,
+                    vol.Optional(CONF_FALLBACK, default=False): cv.boolean,
                 }
             ),
         )
@@ -206,6 +217,7 @@ _TRACKER = {
     vol.Optional(CONF_MAX_SPEED_AGE): _POS_TIME_PERIOD,
     vol.Optional(CONF_DRIVING_SPEED): vol.Coerce(float),
     vol.Optional(CONF_END_DRIVING_DELAY): _POS_TIME_PERIOD,
+    vol.Optional(CONF_FALLBACK_AFTER): _POS_TIME_PERIOD,
     vol.Optional(CONF_ENTITY_PICTURE): vol.All(cv.string, _entity_picture),
 }
 _CONFIG_SCHEMA = vol.Schema(
@@ -225,6 +237,7 @@ _CONFIG_SCHEMA = vol.Schema(
                             vol.Optional(CONF_MAX_SPEED_AGE): _POS_TIME_PERIOD,
                             vol.Optional(CONF_DRIVING_SPEED): vol.Coerce(float),
                             vol.Optional(CONF_END_DRIVING_DELAY): _POS_TIME_PERIOD,
+                            vol.Optional(CONF_FALLBACK_AFTER): _POS_TIME_PERIOD,
                         }
                     ),
                     vol.Required(CONF_TRACKERS, default=list): vol.All(

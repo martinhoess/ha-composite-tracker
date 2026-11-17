@@ -5,6 +5,7 @@ PICTURE_SUFFIXES = ("bmp", "jpg", "png")
 MIME_TO_SUFFIX = {"image/bmp": "bmp", "image/jpeg": "jpg", "image/png": "png"}
 
 DEF_REQ_MOVEMENT = False
+DEF_FALLBACK_AFTER = {"hours": 0, "minutes": 5, "seconds": 0}
 
 MIN_SPEED_SECONDS = 3
 MIN_ANGLE_SPEED = 1  # meters / second
@@ -20,6 +21,8 @@ CONF_DRIVING_SPEED = "driving_speed"
 CONF_END_DRIVING_DELAY = "end_driving_delay"
 CONF_ENTITY = "entity"
 CONF_ENTITY_PICTURE = "entity_picture"
+CONF_FALLBACK = "fallback"
+CONF_FALLBACK_AFTER = "fallback_after"
 CONF_MAX_SPEED_AGE = "max_speed_age"
 CONF_REQ_MOVEMENT = "require_movement"
 CONF_SHOW_UNKNOWN_AS_0 = "show_unknown_as_0"

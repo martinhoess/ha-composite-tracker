@@ -52,7 +52,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
-from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.restore_state import RestoredExtraData, RestoreEntity
 from homeassistant.helpers.typing import GPSType
 import homeassistant.util.dt as dt_util
 from homeassistant.util.location import distance
@@ -71,9 +71,12 @@ from .const import (
     CONF_END_DRIVING_DELAY,
     CONF_ENTITY,
     CONF_ENTITY_PICTURE,
+    CONF_FALLBACK,
+    CONF_FALLBACK_AFTER,
     CONF_MAX_SPEED_AGE,
     CONF_REQ_MOVEMENT,
     CONF_USE_PICTURE,
+    DEF_FALLBACK_AFTER,
     MIN_ANGLE_SPEED,
     MIN_SPEED_SECONDS,
     SIG_COMPOSITE_BAT_LVL,
@@ -99,6 +102,9 @@ _GPS_ACCURACY_ATTRS = (ATTR_GPS_ACCURACY, ATTR_ACC)
 _BATTERY_ATTRS = (ATTR_BATTERY_LEVEL, ATTR_BATTERY)
 _CHARGING_ATTRS = (ATTR_BATTERY_CHARGING, ATTR_CHARGING)
 _LAST_SEEN_ATTRS = (ATTR_LAST_SEEN, ATTR_LAST_TIMESTAMP)
+# Key of the per-input state kept in the restore data (not in attributes, so the
+# recorder does not grow with every update).
+_RESTORE_INPUTS = "inputs"
 
 
 async def async_setup_entry(
@@ -140,6 +146,7 @@ class EntityData:
     entity_id: str
     use_all_states: bool
     use_picture: bool
+    fallback: bool = False
     _status: EntityStatus = EntityStatus.NOT_SET
     seen: datetime | None = None
     source_type: SourceType = SourceType.GPS
@@ -150,10 +157,13 @@ class EntityData:
         """Return if last update was good."""
         return self._status is EntityStatus.GOOD
 
-    def set_params(self, use_all_states: bool, use_picture: bool) -> None:
+    def set_params(
+        self, use_all_states: bool, use_picture: bool, fallback: bool
+    ) -> None:
         """Set parameters."""
         self.use_all_states = use_all_states
         self.use_picture = use_picture
+        self.fallback = fallback
 
     def good(
         self, seen: datetime, source_type: SourceType, data: Location | str
@@ -229,6 +239,7 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
     _max_speed_age: timedelta | None
     _driving_speed: float | None  # m/s
     _end_driving_delay: timedelta | None
+    _fallback_after: timedelta
     _use_entity_picture: bool
 
     def __init__(self, entry: ConfigEntry) -> None:
@@ -243,6 +254,8 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
             self._attr_unique_id = entry.entry_id
         self._attr_extra_state_attributes = {}
         self._entities: dict[str, EntityData] = {}
+        # Per-input state from before the restart, consumed when inputs are created.
+        self._restored_inputs: dict[str, tuple[datetime, Location]] = {}
 
     @cached_property
     @override
@@ -294,6 +307,10 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
             self._end_driving_delay = None
         else:
             self._end_driving_delay = cast(timedelta, cv.time_period(edd))
+        self._fallback_after = cast(
+            timedelta,
+            cv.time_period(options.get(CONF_FALLBACK_AFTER, DEF_FALLBACK_AFTER)),
+        )
         entity_cfgs = {
             entity_cfg[CONF_ENTITY]: entity_cfg
             for entity_cfg in options[CONF_ENTITY_ID]
@@ -320,14 +337,24 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
         for entity_id in cur_entity_ids:
             entity_cfg = entity_cfgs[entity_id]
             self._entities[entity_id].set_params(
-                entity_cfg[CONF_ALL_STATES], entity_cfg[CONF_USE_PICTURE]
+                entity_cfg[CONF_ALL_STATES],
+                entity_cfg[CONF_USE_PICTURE],
+                entity_cfg.get(CONF_FALLBACK, False),
             )
 
         for entity_id in new_entity_ids:
             entity_cfg = entity_cfgs[entity_id]
-            self._entities[entity_id] = EntityData(
-                entity_id, entity_cfg[CONF_ALL_STATES], entity_cfg[CONF_USE_PICTURE]
+            entity = self._entities[entity_id] = EntityData(
+                entity_id,
+                entity_cfg[CONF_ALL_STATES],
+                entity_cfg[CONF_USE_PICTURE],
+                entity_cfg.get(CONF_FALLBACK, False),
             )
+            # Known position from before the restart: the first update afterwards
+            # is then compared against it instead of counting as movement.
+            if restored := self._restored_inputs.pop(entity_id, None):
+                entity.seen, entity.data = restored
+        self._restored_inputs.clear()
 
         for entity_id in cfg_entity_ids:
             await self._entity_updated(entity_id, self.hass.states.get(entity_id))
@@ -368,8 +395,43 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
         await self.async_request_call(self._process_config_options())
         self.async_write_ha_state()
 
+    @property
+    @override
+    def extra_restore_state_data(self) -> RestoredExtraData:
+        """Return per-input state to keep across a restart."""
+        inputs = {
+            entity_id: {
+                "seen": entity.seen.isoformat(),
+                "lat": entity.data.gps[0],
+                "lon": entity.data.gps[1],
+                "acc": entity.data.accuracy,
+            }
+            for entity_id, entity in self._entities.items()
+            if entity.seen is not None and isinstance(entity.data, Location)
+        }
+        return RestoredExtraData({_RESTORE_INPUTS: inputs})
+
+    async def _restore_inputs(self) -> None:
+        """Restore per-input state saved before the restart."""
+        if not (extra := await self.async_get_last_extra_data()):
+            return
+        inputs = extra.as_dict().get(_RESTORE_INPUTS)
+        if not isinstance(inputs, dict):
+            return
+        for entity_id, data in inputs.items():
+            try:
+                seen = dt_util.parse_datetime(data["seen"])
+                location = Location(
+                    (float(data["lat"]), float(data["lon"])), float(data["acc"])
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            if seen is not None:
+                self._restored_inputs[entity_id] = (dt_util.as_utc(seen), location)
+
     async def _restore_state(self) -> None:
         """Restore state."""
+        await self._restore_inputs()
         if not (last_state := await self.async_get_last_state()):
             return
 
@@ -641,6 +703,17 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
             entity.bad(f"unsupported source_type: {source_type}")
             return
 
+        # A fallback input only fills in while every primary input is silent.
+        if entity.fallback and self._primary_reported_within(last_seen):
+            _LOGGER.debug(
+                "For %s skipping update from %s: fallback input, "
+                "a primary input reported within %s",
+                self.entity_id,
+                entity_id,
+                self._fallback_after,
+            )
+            return
+
         # Is this newer info than last update?
         if self._prev_seen and last_seen <= self._prev_seen:
             _LOGGER.debug(
@@ -794,6 +867,19 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
 
         if driving or self._drive_ending_delayed:
             self._state_override = STATE_DRIVING
+
+    def _primary_reported_within(self, last_seen: datetime) -> bool:
+        """Return if a primary input reported within the fallback period.
+
+        Every valid report counts, including one skipped for lack of movement:
+        a phone lying still still proves where it is.
+        """
+        seen = [
+            entity.seen
+            for entity in self._entities.values()
+            if not entity.fallback and entity.seen is not None
+        ]
+        return bool(seen) and last_seen - max(seen) < self._fallback_after
 
     def _use_non_gps_data(self, entity_id: str, state: str) -> bool:
         """Determine if state should be used for non-GPS based entity."""

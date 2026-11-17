@@ -59,10 +59,13 @@ from .const import (
     CONF_END_DRIVING_DELAY,
     CONF_ENTITY,
     CONF_ENTITY_PICTURE,
+    CONF_FALLBACK,
+    CONF_FALLBACK_AFTER,
     CONF_MAX_SPEED_AGE,
     CONF_REQ_MOVEMENT,
     CONF_SHOW_UNKNOWN_AS_0,
     CONF_USE_PICTURE,
+    DEF_FALLBACK_AFTER,
     DOMAIN,
     MIME_TO_SUFFIX,
     PICTURE_SUFFIXES,
@@ -87,6 +90,7 @@ def split_conf(conf: dict[str, Any]) -> dict[str, dict[str, Any]]:
                     CONF_DRIVING_SPEED,
                     CONF_END_DRIVING_DELAY,
                     CONF_ENTITY_PICTURE,
+                    CONF_FALLBACK_AFTER,
                 ),
             ),
         )
@@ -235,6 +239,7 @@ class CompositeFlow(ConfigEntryBaseFlow):
                         CONF_ENTITY: entity_id,
                         CONF_USE_PICTURE: False,
                         CONF_ALL_STATES: False,
+                        CONF_FALLBACK: False,
                     },
                 )
                 for entity_id in user_input[CONF_ENTITY_ID]
@@ -488,7 +493,7 @@ class CompositeFlow(ConfigEntryBaseFlow):
             entity_ids = user_input.get(CONF_ENTITY, [])
             for cfg in self.options[CONF_ENTITY_ID]:
                 cfg[CONF_ALL_STATES] = cfg[CONF_ENTITY] in entity_ids
-            return await self.async_step_done()
+            return await self.async_step_fallback()
 
         data_schema = vol.Schema(
             {
@@ -508,7 +513,50 @@ class CompositeFlow(ConfigEntryBaseFlow):
             data_schema = self.add_suggested_values_to_schema(
                 data_schema, {CONF_ENTITY: all_state_entities}
             )
-        return self.async_show_form(step_id="all_states", data_schema=data_schema)
+        return self.async_show_form(
+            step_id="all_states", data_schema=data_schema, last_step=False
+        )
+
+    async def async_step_fallback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Specify fallback inputs and how long primaries must be silent."""
+        if user_input is not None:
+            entity_ids = user_input.get(CONF_ENTITY, [])
+            for cfg in self.options[CONF_ENTITY_ID]:
+                cfg[CONF_FALLBACK] = cfg[CONF_ENTITY] in entity_ids
+            self.options[CONF_FALLBACK_AFTER] = user_input[CONF_FALLBACK_AFTER]
+            return await self.async_step_done()
+
+        data_schema = vol.Schema(
+            {
+                vol.Optional(CONF_ENTITY): EntitySelector(
+                    EntitySelectorConfig(
+                        include_entities=self._entity_ids, multiple=True
+                    )
+                ),
+                vol.Required(CONF_FALLBACK_AFTER): DurationSelector(
+                    DurationSelectorConfig(
+                        enable_day=False, enable_millisecond=False, allow_negative=False
+                    )
+                ),
+            }
+        )
+        suggested_values: dict[str, Any] = {
+            CONF_FALLBACK_AFTER: self.options.get(
+                CONF_FALLBACK_AFTER, DEF_FALLBACK_AFTER
+            )
+        }
+        if fallback_entities := [
+            cfg[CONF_ENTITY]
+            for cfg in self.options[CONF_ENTITY_ID]
+            if cfg.get(CONF_FALLBACK)
+        ]:
+            suggested_values[CONF_ENTITY] = fallback_entities
+        data_schema = self.add_suggested_values_to_schema(
+            data_schema, suggested_values
+        )
+        return self.async_show_form(step_id="fallback", data_schema=data_schema)
 
     @abstractmethod
     async def async_step_done(

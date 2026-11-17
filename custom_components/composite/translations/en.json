@@ -9,6 +9,14 @@
                     "entity": "Entity"
                 }
             },
+            "fallback": {
+                "title": "Fallback Inputs",
+                "description": "Select inputs that should only fill in while all other inputs are silent, e.g. vehicle trackers.\nA fallback input is used only if no other input has reported for the given period.",
+                "data": {
+                    "entity": "Fallback inputs",
+                    "fallback_after": "Other inputs silent for"
+                }
+            },
             "end_driving_delay": {
                 "title": "End Driving Delay",
                 "description": "Time to hold Driving state after speed falls below configured Driving speed.\n\nLeave empty to change back to Away immediately. If used, a good starting point is 2 minutes.",
@@ -108,6 +116,14 @@
                 "description": "Select entities for which all states should be used.\nNote that this only applies to entities whose source type is not GPS.",
                 "data": {
                     "entity": "Entity"
+                }
+            },
+            "fallback": {
+                "title": "Fallback Inputs",
+                "description": "Select inputs that should only fill in while all other inputs are silent, e.g. vehicle trackers.\nA fallback input is used only if no other input has reported for the given period.",
+                "data": {
+                    "entity": "Fallback inputs",
+                    "fallback_after": "Other inputs silent for"
                 }
             },
             "end_driving_delay": {

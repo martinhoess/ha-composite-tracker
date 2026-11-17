@@ -4,6 +4,9 @@ This integration creates a composite `device_tracker` entity from one or more ot
 
 It also creates `sensor` entities that indicate the speed and battery level of the device.
 
+> [!NOTE]
+> This is a fork of [pnbruckner/ha-composite-tracker](https://github.com/pnbruckner/ha-composite-tracker). It adds [fallback inputs](#fallback-inputs) and keeps each input's last position across restarts. Without fallback inputs it behaves like upstream.
+
 Currently any entity that has "GPS" attributes (`gps_accuracy` or `acc`, and either `latitude` & `longitude` or `lat` & `lon`), or any `device_tracker` entity with a `source_type` attribute of `bluetooth`, `bluetooth_le`, `gps` or `router`, or any `binary_sensor` or `input_boolean` entity, can be used as an input entity.
 
 ## Installation
@@ -78,6 +81,7 @@ composite:
   - **max_speed_age** (*Optional*)
   - **driving_speed** (*Optional*)
   - **end_driving_delay** (*Optoinal*)
+  - **fallback_after** (*Optional*): Default is 5 minutes.
 
 - **trackers**: The list of composite trackers to create. For each entry see [Tracker entries](#tracker-entries).
 
@@ -91,6 +95,7 @@ composite:
 - **max_speed_age** (*Optional*): If set, defines the maximum amount of time between speed sensor updates. When this time is exceeded, speed sensor's state will be cleared (i.e., state will become `unknown` and `angle` & `direction` attributes will become null.)
 - **driving_speed** (*Optional*): Defines a driving speed threshold (in MPH or KPH, depending on general unit system setting.) If set, and current speed is at or above this value, and tracker is not in a zone, then the state of the tracker will be set to `driving`.
 - **end_driving_delay** (*Optional*): If set, defines the amount of time to wait before changing state from `driving` (i.e., Driving) back to `not_home` (i.e., Away) after speed falls below set `driving_speed`. This can prevent state changing back and forth when, e.g., slowing for a turn or stopping at a traffic light. If not set, state will change back to `not_home` immediately after speed drops below threshold. May only be used if `driving_speed` is set.
+- **fallback_after** (*Optional*): How long all other inputs must have been silent before a [fallback input](#fallback-inputs) is used. Default is 5 minutes.
 - **entity_picture** (*Optional*): Specifies image to use for entity. Can be an URL or a file in "/local". Note that /local is used by the frontend to access files in `<config_path>/www` (which is typically `/config/www`.) You can specify file names with or without the "/local" prefix. If this option is used, then `use_picture` cannot be used.
 
 #### Entity Dictionary
@@ -98,6 +103,7 @@ composite:
 - **entity**: Entity ID of an entity to watch.
 - **all_states** (*Optional*): `true` or `false`. Default is `false`. If `true`, use all states of the entity. If `false`, only use the "Home" state. NOTE: This option is ignored for entities whose `source_type` is `gps` for which all states are always used.
 - **use_picture** (*Optional*): `true` or `false`. Default is `false`. If `true`, use the entity's picture for the composite. Can only be `true` for at most one of the entities. If `entity_picture` is used, then this option cannot be used.
+- **fallback** (*Optional*): `true` or `false`. Default is `false`. If `true`, the entity is a [fallback input](#fallback-inputs).
 
 ## Watched device notes
 ### Used states
@@ -125,6 +131,18 @@ Integrations known to provide a supported "last seen" attribute:
 - [Life360](https://github.com/pnbruckner/ha-life360) (`last_seen`)
 - [Enhanced GPSLogger](https://github.com/pnbruckner/ha-gpslogger) (`last_seen`)
 - [iCould3](https://github.com/gcobb321/icloud3) (`last_timestamp`)
+
+### Fallback inputs
+
+A fallback input (e.g., a tracker built into a car) is only used while all other inputs ("primary inputs") have been silent for `fallback_after`. The comparison uses the "last seen" time of the fallback's update and the newest "last seen" time of any primary input. Every valid update of a primary input counts, even one that is skipped because of `require_movement`, so a phone lying still keeps a parked car from taking over. If no primary input has reported yet, a fallback input is used like any other input.
+
+This fixes, e.g., a car parked somewhere else that takes over when it reports, while the phone that is actually carried lies still. Known limit: if the phone is left at home and keeps reporting while the car is driven away, the composite stays at home.
+
+In the UI the fallback inputs and the period are set in the last step of the options.
+
+### Restart
+
+Each GPS input's last position, accuracy and "last seen" time are kept across a restart (in the restore data, not in attributes). With `require_movement`, the first update after a restart is therefore compared with the position from before instead of counting as movement. The first start after installing this version has no such data yet and behaves like upstream.
 
 ### Miscellaneous
 
