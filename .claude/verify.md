@@ -1,8 +1,9 @@
 # Verify-Kontrakt: ha-composite-tracker (Fork)
 
 Fork von `pnbruckner/ha-composite-tracker`, Home-Assistant-Custom-Integration `composite`.
-Remotes: `upstream` (pnbruckner), `origin` (martinhoess). Der Fork-Stand liegt als genau ein Commit
-auf dem Upstream-Tag auf `main`, gearbeitet wird auf `feat/…`/`fix/…`.
+Remotes: `upstream` (pnbruckner), `origin` (martinhoess, sobald der Fork auf GitHub angelegt ist).
+Zielzustand: der Fork-Stand liegt als genau ein Commit auf dem Upstream-Tag auf `main`. Gearbeitet wird
+auf `feat/…`/`fix/…`, gefaltet wird nach dem Live-Beleg.
 
 ## Test
 
