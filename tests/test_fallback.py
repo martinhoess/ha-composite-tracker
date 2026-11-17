@@ -236,3 +236,24 @@ async def test_no_speed_across_fallback_switch(
     assert state.attributes["last_entity_id"] == PHONE
     assert state.state == STATE_NOT_HOME
     assert hass.states.get("sensor.test_speed").state in ("unknown", "0.0")
+
+
+async def test_phone_reconnect_while_car_leads(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A phone input back from unavailable with its old position does not take over.
+
+    The first report after an outage (or after a restart) is no news.
+    """
+    await setup_composite(hass, fallback=[CAR])
+    await run_steps(hass, freezer, [(0, PHONE, HOME), (1, CAR, HOME), (600, CAR, FAR)])
+    assert tracker(hass).attributes["last_entity_id"] == CAR
+
+    freezer.tick(timedelta(seconds=30))
+    hass.states.async_set(PHONE, "unavailable", {})
+    await hass.async_block_till_done()
+    await run_steps(hass, freezer, [(30, PHONE, HOME)])
+
+    state = tracker(hass)
+    assert state.state == STATE_NOT_HOME
+    assert state.attributes["last_entity_id"] == CAR

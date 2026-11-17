@@ -354,7 +354,7 @@ async def test_restart_while_car_leads_phone_state_after_setup(
 ) -> None:
     """Same, but the phone's integration writes its state after the composite.
 
-    Until Home Assistant runs, such states are no new reports.
+    An input's first report after the restart is no news.
     """
     now = dt_util.utcnow()
     mock_restore_cache_with_extra_data(

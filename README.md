@@ -142,7 +142,7 @@ In the UI the fallback inputs and the period are set in the last step of the opt
 
 ### Restart
 
-Each GPS input's last position, accuracy and "last seen" time are kept across a restart (in the restore data, not in attributes). With `require_movement`, the first update after a restart is therefore compared with the position from before instead of counting as movement. The first start after installing this version has no such data yet and behaves like upstream. After a crash, the last periodic save applies (up to 15 minutes old). States that inputs write while Home Assistant is still starting are not treated as new reports.
+Each GPS input's last position, accuracy and "last seen" time are kept across a restart (in the restore data, not in attributes). With `require_movement`, the first update after a restart is therefore compared with the position from before instead of counting as movement. The first start after installing this version has no such data yet and behaves like upstream. After a crash, the last periodic save applies (up to 15 minutes old). The first update of a primary input after a restart or after it was unavailable never takes the lead from a fallback input without movement: it is the old state, not news.
 
 ### Miscellaneous
 
