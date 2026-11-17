@@ -3,7 +3,7 @@
 ## 1. Testumgebung
 
 - [ ] 1.1 `pyproject.toml` mit Dev-Abhängigkeit `pytest-homeassistant-custom-component` (Version passend zu HA ≥ 2026.7), `tests/conftest.py` mit `enable_custom_integrations`. Beleg: `uv run pytest -q` sammelt Tests ohne Fehler.
-- [ ] 1.2 `.claude/verify.md` mit Testaufruf, Lint, Version und Release-Weg. Beleg: Datei im selben Commit wie 1.1.
+- [ ] 1.2 `.claude/verify.md` mit Testaufruf, Rückweg-Prüfung, Version und Release-Weg (kein Lint, Upstream hat keinen). Beleg: Datei im selben Commit wie 1.1.
 
 ## 2. Stand je Eingang über Neustart
 
@@ -13,7 +13,7 @@
 
 - [ ] 3.1 Konstanten, YAML-Schema (`fallback`, `fallback_after`) und Übernahme in `_process_config_options`. Beleg: `tests/test_config_flow.py::test_yaml_import_fallback`.
 - [ ] 3.2 Prüfung in `_entity_updated`. Beleg: `tests/test_fallback.py` (Szenarien A–I als Tabelle, dazu ohne Markierung und ohne Hauptgerät).
-- [ ] 3.3 Options-Flow-Schritt `fallback` mit Übersetzungen (en, de). Beleg: `tests/test_config_flow.py::test_options_flow_fallback_step`.
+- [ ] 3.3 Options-Flow-Schritt `fallback` mit Übersetzung (en; it/nl fallen auf en zurück). Beleg: `tests/test_config_flow.py::test_options_flow_fallback_step`.
 
 ## 4. Replay gegen echte Daten
 
@@ -27,7 +27,7 @@
 
 ## Workflow follow-up
 
-- Fork `martinhoess/ha-composite-tracker` anlegen, Branch pushen, Release `4.3.0.101` mit Zip.
+- Fork `martinhoess/ha-composite-tracker` anlegen, Branch pushen, Release `4.3.0.101` (Tag, HACS lädt aus dem Tag, kein Zip).
 - Installation über HACS, Neustart, Auto als Lückenfüller zurück in die Composite.
 - Live-Beleg: Neustart von HA, während das Auto woanders steht, `person.<name>` bleibt `home`.
 - Wiki-Seiten `google-maps` und `area-occupancy` nachziehen, release-watch eintragen.

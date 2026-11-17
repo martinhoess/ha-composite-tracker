@@ -6,8 +6,20 @@ import pytest
 
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from .conftest import CAR, FAR, FAR2, HOME, NEAR, PHONE, report, setup_composite, tracker
+from .conftest import (
+    CAR,
+    DOMAIN,
+    FAR,
+    FAR2,
+    HOME,
+    NEAR,
+    PHONE,
+    report,
+    setup_composite,
+    tracker,
+)
 
 # Each step: (seconds after the previous step, input, position).
 Step = tuple[int, str, tuple[float, float]]
@@ -46,7 +58,8 @@ SCENARIOS: dict[str, tuple[list[Step], str, str]] = {
         CAR,
     ),
     "D_vehicle_parked_elsewhere": (
-        [(0, PHONE, HOME), (15, CAR, NEAR), *phone_still_at_home(10), (5, CAR, NEAR)],
+        # The last car report moves, so only the period can stop it.
+        [(0, PHONE, HOME), (15, CAR, NEAR), *phone_still_at_home(10), (5, CAR, FAR)],
         STATE_HOME,
         PHONE,
     ),
@@ -65,6 +78,19 @@ SCENARIOS: dict[str, tuple[list[Step], str, str]] = {
     "G_phone_returns": (
         [(0, PHONE, HOME), (1, CAR, HOME), (600, CAR, FAR), (60, PHONE, FAR2)],
         STATE_NOT_HOME,
+        PHONE,
+    ),
+    "G_phone_returns_unmoved": (
+        # Car took over while the phone was silent; the phone reports again from
+        # the same spot: it wins, and the car is blocked again afterwards.
+        [
+            (0, PHONE, HOME),
+            (1, CAR, HOME),
+            (600, CAR, FAR),
+            (60, PHONE, HOME),
+            (30, CAR, FAR2),
+        ],
+        STATE_HOME,
         PHONE,
     ),
     "H_taxi_or_train": (
@@ -158,4 +184,33 @@ async def test_fallback_after_default_is_five_minutes(
     assert tracker(hass).attributes["last_entity_id"] == PHONE
 
     await run_steps(hass, freezer, [(2, CAR, FAR2)])
+    assert tracker(hass).attributes["last_entity_id"] == CAR
+
+
+async def test_non_gps_primary_ignored_report_does_not_block(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A router reporting not_home (ignored by the composite) does not block."""
+    router = "binary_sensor.router"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="test",
+        data={},
+        options={
+            "entity_id": [
+                {"entity": e, "all_states": False, "use_picture": False, "fallback": f}
+                for e, f in ((PHONE, False), (router, False), (CAR, True))
+            ],
+            "require_movement": True,
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await run_steps(hass, freezer, [(0, PHONE, HOME), (1, CAR, HOME)])
+
+    freezer.tick(timedelta(seconds=400))
+    hass.states.async_set(router, "off")
+    await hass.async_block_till_done()
+    await run_steps(hass, freezer, [(10, CAR, FAR)])
+
     assert tracker(hass).attributes["last_entity_id"] == CAR

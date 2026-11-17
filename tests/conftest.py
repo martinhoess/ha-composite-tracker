@@ -60,6 +60,7 @@ def entry_options(
     fallback: Iterable[str] = (),
     require_movement: bool = True,
     fallback_after: dict[str, int] | None = None,
+    inputs: Iterable[str] = (PHONE, CAR),
 ) -> dict[str, Any]:
     """Return options of a composite with phone and car as inputs."""
     options: dict[str, Any] = {
@@ -70,7 +71,7 @@ def entry_options(
                 "use_picture": False,
                 "fallback": entity_id in fallback,
             }
-            for entity_id in (PHONE, CAR)
+            for entity_id in inputs
         ],
         "require_movement": require_movement,
     }

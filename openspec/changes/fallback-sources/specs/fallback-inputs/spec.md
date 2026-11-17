@@ -34,6 +34,11 @@ Eine Meldung eines Lückenfüllers SHALL die Composite nur ändern, wenn seit de
 - **THEN** übernimmt die Composite wieder das Telefon
 - Beleg: `tests/test_fallback.py::test_scenarios[G_phone_returns]`
 
+#### Scenario: Telefon meldet wieder, ohne sich bewegt zu haben
+- **WHEN** ein Lückenfüller übernommen hat und das Telefon danach von seiner alten Position meldet
+- **THEN** übernimmt die Composite das Telefon trotz „Require movement“, und weitere Lückenfüller-Meldungen zählen wieder erst nach der Frist
+- Beleg: `tests/test_fallback.py::test_scenarios[G_phone_returns_unmoved]`
+
 #### Scenario: Kein Hauptgerät bisher
 - **WHEN** kein Hauptgerät je gemeldet hat
 - **THEN** zählt der Lückenfüller wie ein normaler Eingang
@@ -41,12 +46,22 @@ Eine Meldung eines Lückenfüllers SHALL die Composite nur ändern, wenn seit de
 
 ### Requirement: Jede gültige Meldung eines Hauptgeräts hält die Frist
 
-Für die Frist SHALL jede gültige Meldung eines Hauptgeräts zählen, auch wenn sie wegen „Require movement“ die Position nicht ändert.
+Für die Frist SHALL jede gültige GPS-Meldung eines Hauptgeräts zählen, auch wenn sie wegen „Require movement“ die Position nicht ändert. Eine Nicht-GPS-Meldung SHALL nur zählen, wenn die Composite sie verwenden würde (Zustand `home` oder „Use All States“).
 
 #### Scenario: Telefon liegt still (heutiger Fehler)
 - **WHEN** „Require movement“ an ist, das Telefon still daheim liegt und alle 30 s meldet und das Fahrzeug außerhalb der Heimzone eine neue Position meldet
 - **THEN** bleibt die Composite auf `home`
 - Beleg: `tests/test_fallback.py::test_scenarios[D_vehicle_parked_elsewhere]`
+
+#### Scenario: Ignorierte Nicht-GPS-Meldung
+- **WHEN** ein Router-Hauptgerät `not_home` meldet, das die Composite ignoriert, und danach der Lückenfüller eine neue Position meldet
+- **THEN** zählt der Lückenfüller, sofern sonst kein Hauptgerät innerhalb der Frist gemeldet hat
+- Beleg: `tests/test_fallback.py::test_non_gps_primary_ignored_report_does_not_block`
+
+#### Scenario: Reihenfolge beim Start
+- **WHEN** die Composite startet und Hauptgerät und Lückenfüller schon Zustände haben
+- **THEN** werden die Hauptgeräte vor den Lückenfüllern ausgewertet, unabhängig von der Reihenfolge in der Konfiguration
+- Beleg: `tests/test_restore.py::test_startup_handles_primary_before_fallback`
 
 ### Requirement: Frist ist einstellbar
 

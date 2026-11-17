@@ -21,6 +21,7 @@ from .conftest import (
     NEAR,
     PHONE,
     TRACKER,
+    entry_options,
     report,
     setup_composite,
     tracker,
@@ -216,3 +217,70 @@ async def test_restore_data_is_saved(
     assert inputs[CAR]["lon"] == FAR2[1]
     assert inputs[CAR]["acc"] == 10
     assert dt_util.parse_datetime(inputs[CAR]["seen"]) is not None
+
+
+async def test_startup_handles_primary_before_fallback(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Startup reports: primaries first, even if the fallback is listed first.
+
+    The phone was silent before the restart and the car moved meanwhile; only
+    the phone's report at startup keeps the car out.
+    """
+    now = dt_util.utcnow()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                composite_state(STATE_HOME, HOME, PHONE, now - timedelta(hours=1)),
+                {
+                    "inputs": {
+                        PHONE: saved_input(HOME, now - timedelta(hours=1)),
+                        CAR: saved_input(NEAR, now - timedelta(hours=2)),
+                    }
+                },
+            )
+        ],
+    )
+    report(hass, CAR, FAR)
+    freezer.tick(timedelta(seconds=1))
+    report(hass, PHONE, HOME)
+    await setup_composite(hass, fallback=[CAR], inputs=(CAR, PHONE))
+
+    state = tracker(hass)
+    assert state.state == STATE_HOME
+    assert state.attributes["last_entity_id"] == PHONE
+
+
+async def test_restored_data_of_unconfigured_input_is_dropped(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """An input added later does not inherit data saved before the restart."""
+    now = dt_util.utcnow()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                composite_state(STATE_HOME, HOME, PHONE, now - timedelta(seconds=30)),
+                {
+                    "inputs": {
+                        PHONE: saved_input(HOME, now - timedelta(seconds=30)),
+                        CAR: saved_input(NEAR, now - timedelta(hours=1)),
+                    }
+                },
+            )
+        ],
+    )
+    report(hass, PHONE, HOME)
+    entry = await setup_composite(hass, inputs=(PHONE,))
+
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, **entry_options()}
+    )
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=5))
+    report(hass, CAR, NEAR)
+    await hass.async_block_till_done()
+
+    # Without inherited data the car's first report counts as movement.
+    assert tracker(hass).attributes["last_entity_id"] == CAR

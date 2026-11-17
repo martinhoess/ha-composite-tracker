@@ -356,7 +356,9 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
                 entity.seen, entity.data = restored
         self._restored_inputs.clear()
 
-        for entity_id in cfg_entity_ids:
+        # Primary inputs first, so their current reports count before any
+        # fallback input is judged (in configured order, not set order).
+        for entity_id in sorted(entity_cfgs, key=lambda e: self._entities[e].fallback):
             await self._entity_updated(entity_id, self.hass.states.get(entity_id))
 
         self._use_entity_picture = True
@@ -641,7 +643,13 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
                 return
             entity.good(last_seen, SourceType.GPS, new_data)
 
-            if self._req_movement and old_data:
+            # After a fallback input took over, the next primary report counts
+            # even without movement: it is newer news than the fallback's.
+            if (
+                self._req_movement
+                and old_data
+                and not (not entity.fallback and self._fallback_leads)
+            ):
                 dist = distance(gps[0], gps[1], old_data.gps[0], old_data.gps[1])
                 if dist is not None and dist <= gps_accuracy + old_data.accuracy:
                     _LOGGER.debug(
@@ -868,16 +876,31 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
         if driving or self._drive_ending_delayed:
             self._state_override = STATE_DRIVING
 
+    @property
+    def _fallback_leads(self) -> bool:
+        """Return if the last update used came from a fallback input."""
+        last = self._entities.get(
+            self._attr_extra_state_attributes.get(ATTR_LAST_ENTITY_ID, "")
+        )
+        return last is not None and last.fallback
+
     def _primary_reported_within(self, last_seen: datetime) -> bool:
         """Return if a primary input reported within the fallback period.
 
-        Every valid report counts, including one skipped for lack of movement:
-        a phone lying still still proves where it is.
+        Every valid GPS report counts, including one skipped for lack of
+        movement: a phone lying still still proves where it is. A non-GPS report
+        only counts if the composite would use it (home, or all_states).
         """
         seen = [
             entity.seen
             for entity in self._entities.values()
-            if not entity.fallback and entity.seen is not None
+            if not entity.fallback
+            and entity.seen is not None
+            and (
+                entity.source_type == SourceType.GPS
+                or entity.use_all_states
+                or entity.data == STATE_HOME
+            )
         ]
         return bool(seen) and last_seen - max(seen) < self._fallback_after
 
