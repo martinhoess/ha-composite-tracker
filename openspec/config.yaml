@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Language: German
+  All artifacts must be written in German (echte Umlaute ä/ö/ü/ß).
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Code identifiers are English, following the upstream style.
+
+  Projekt: Fork der Home-Assistant-Integration Composite (pnbruckner/ha-composite-tracker).
+  Sie fasst mehrere Tracker zu einem device_tracker zusammen; die jeweils neueste Meldung gewinnt.
+  Der Fork liegt als genau ein Commit auf dem Upstream-Tag und wird per Rebase nachgezogen.
+  Das Repo ist öffentlich: keine privaten Pfade, Hosts, IP-Adressen, Namen oder Entitäten.
+  Prosa nach den Regeln für deutsche Doku (kurz, konkret, keine Füllwörter).
+
+rules:
+  specs:
+    - Jedes Szenario ist prüfbar und nennt seinen Beleg (Test in tests/ oder Prüfschritt aus .claude/verify.md).
+  tasks:
+    - Jede Aufgabe nennt, womit sie belegt wird.
+
+operations:
+  apply:
+    guidance:
+      - Nach jedem abgeschlossenen Baustein Code-Review (Subagent ash bzw. mh-code-review), Findings beheben, dann committen.
+      - Fertig heißt, mother führt .claude/verify.md aus und meldet grün; ripley prüft danach, ob die Tests die geänderte Stelle überhaupt messen.
+      - ".claude/verify.md kommt in den Commit mit dem ersten Testkommando und zieht bei jeder Änderung von Testaufruf, Version oder Ablage im selben Commit mit."
+  archive:
+    guidance:
+      - Vor dem Archivieren muss mother auf .claude/verify.md grün gemeldet haben.
