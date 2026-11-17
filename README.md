@@ -136,7 +136,7 @@ Integrations known to provide a supported "last seen" attribute:
 
 A fallback input (e.g., a tracker built into a car) is only used while all other inputs ("primary inputs") have been silent for `fallback_after`. The comparison uses the "last seen" time of the fallback's update and the newest "last seen" time of any primary input. Every valid GPS update of a primary input counts, even one that is skipped because of `require_movement`, so a phone lying still keeps a parked car from taking over. A non-GPS update only counts if the composite would use it ('home', or `all_states`). If no primary input has reported yet, a fallback input is used like any other input. After a fallback input took over, the next update of a primary input is used even if it did not move. At startup, primary inputs are processed before fallback inputs.
 
-This fixes, e.g., a car parked somewhere else that takes over when it reports, while the phone that is actually carried lies still. Known limit: if the phone is left at home and keeps reporting while the car is driven away, the composite stays at home.
+This fixes, e.g., a car parked somewhere else that takes over when it reports, while the phone that is actually carried lies still. Known limits: if the phone is left at home and keeps reporting while the car is driven away, the composite stays at home. If a phone without a `last_seen` attribute delivers buffered old positions after a long silence, they count as new and block the fallback for `fallback_after`. No speed is calculated when switching between a fallback and a primary input.
 
 In the UI the fallback inputs and the period are set in the last step of the options.
 

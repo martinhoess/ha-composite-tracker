@@ -61,7 +61,16 @@ Für die Frist SHALL jede gültige GPS-Meldung eines Hauptgeräts zählen, auch 
 #### Scenario: Reihenfolge beim Start
 - **WHEN** die Composite startet und Hauptgerät und Lückenfüller schon Zustände haben
 - **THEN** werden die Hauptgeräte vor den Lückenfüllern ausgewertet, unabhängig von der Reihenfolge in der Konfiguration
-- Beleg: `tests/test_restore.py::test_startup_handles_primary_before_fallback`
+- Beleg: `tests/test_restore.py::test_startup_handles_primary_before_fallback`, `tests/test_restore.py::test_startup_order_phone_with_last_seen`
+
+### Requirement: Keine Geschwindigkeit über den Wechsel
+
+Beim Wechsel zwischen Lückenfüller und Hauptgerät SHALL keine Geschwindigkeit aus den Positionen der beiden Geräte berechnet werden.
+
+#### Scenario: Telefon übernimmt vom entfernten Auto
+- **WHEN** das Telefon 60 s nach einer Auto-Meldung aus 5 km Entfernung übernimmt und `driving_speed` gesetzt ist
+- **THEN** meldet der Geschwindigkeitssensor keinen Wert, und die Composite steht nicht auf `driving`
+- Beleg: `tests/test_fallback.py::test_no_speed_across_fallback_switch`
 
 ### Requirement: Frist ist einstellbar
 

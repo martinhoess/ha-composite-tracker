@@ -214,3 +214,25 @@ async def test_non_gps_primary_ignored_report_does_not_block(
     await run_steps(hass, freezer, [(10, CAR, FAR)])
 
     assert tracker(hass).attributes["last_entity_id"] == CAR
+
+
+async def test_no_speed_across_fallback_switch(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Handing over between car and phone yields no speed (and no driving)."""
+    entry = await setup_composite(hass, fallback=[CAR])
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "driving_speed": 10}
+    )
+    await hass.async_block_till_done()
+
+    await run_steps(
+        hass,
+        freezer,
+        [(0, PHONE, FAR), (1, CAR, FAR), (600, CAR, FAR2), (60, PHONE, FAR)],
+    )
+
+    state = tracker(hass)
+    assert state.attributes["last_entity_id"] == PHONE
+    assert state.state == STATE_NOT_HOME
+    assert hass.states.get("sensor.test_speed").state in ("unknown", "0.0")

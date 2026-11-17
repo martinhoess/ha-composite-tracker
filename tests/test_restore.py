@@ -22,6 +22,7 @@ from .conftest import (
     PHONE,
     TRACKER,
     entry_options,
+    gps_attrs,
     report,
     setup_composite,
     tracker,
@@ -284,3 +285,65 @@ async def test_restored_data_of_unconfigured_input_is_dropped(
 
     # Without inherited data the car's first report counts as movement.
     assert tracker(hass).attributes["last_entity_id"] == CAR
+
+
+async def test_restart_while_car_leads(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A restart alone does not hand the lead from the car back to the phone.
+
+    The car led before the restart, the phone has been silent for hours; the
+    phone's restored state at startup is no new report.
+    """
+    now = dt_util.utcnow()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                composite_state(STATE_NOT_HOME, FAR, CAR, now - timedelta(minutes=10)),
+                {
+                    "inputs": {
+                        PHONE: saved_input(HOME, now - timedelta(hours=3)),
+                        CAR: saved_input(FAR, now - timedelta(minutes=10)),
+                    }
+                },
+            )
+        ],
+    )
+    report(hass, PHONE, HOME)
+    report(hass, CAR, FAR)
+    await setup_composite(hass, fallback=[CAR])
+
+    state = tracker(hass)
+    assert state.state == STATE_NOT_HOME
+    assert state.attributes["last_entity_id"] == CAR
+
+
+async def test_startup_order_phone_with_last_seen(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Startup order matters for a phone with last_seen older than the start."""
+    now = dt_util.utcnow()
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                composite_state(STATE_HOME, HOME, PHONE, now - timedelta(hours=1)),
+                {
+                    "inputs": {
+                        PHONE: saved_input(HOME, now - timedelta(hours=1)),
+                        CAR: saved_input(NEAR, now - timedelta(hours=2)),
+                    }
+                },
+            )
+        ],
+    )
+    report(hass, CAR, FAR)
+    hass.states.async_set(
+        PHONE,
+        "not_home",
+        {**gps_attrs(HOME), "last_seen": (now - timedelta(minutes=2)).isoformat()},
+    )
+    await setup_composite(hass, fallback=[CAR], inputs=(CAR, PHONE))
+
+    assert tracker(hass).attributes["last_entity_id"] == PHONE

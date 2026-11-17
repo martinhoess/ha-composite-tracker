@@ -236,6 +236,7 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
     _remove_speed_is_stale: Callable[[], None] | None = None
     _remove_driving_ended: Callable[[], None] | None = None
     _req_movement: bool
+    _initial_pass = False
     _max_speed_age: timedelta | None
     _driving_speed: float | None  # m/s
     _end_driving_delay: timedelta | None
@@ -358,8 +359,16 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
 
         # Primary inputs first, so their current reports count before any
         # fallback input is judged (in configured order, not set order).
-        for entity_id in sorted(entity_cfgs, key=lambda e: self._entities[e].fallback):
-            await self._entity_updated(entity_id, self.hass.states.get(entity_id))
+        # These are states as they stand (after a restart: restored ones), not new
+        # reports, so they must not use the exception for a leading fallback.
+        self._initial_pass = True
+        try:
+            for entity_id in sorted(
+                entity_cfgs, key=lambda e: self._entities[e].fallback
+            ):
+                await self._entity_updated(entity_id, self.hass.states.get(entity_id))
+        finally:
+            self._initial_pass = False
 
         self._use_entity_picture = True
         if entity_picture := options.get(CONF_ENTITY_PICTURE):
@@ -648,7 +657,11 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
             if (
                 self._req_movement
                 and old_data
-                and not (not entity.fallback and self._fallback_leads)
+                and not (
+                    not entity.fallback
+                    and self._fallback_leads
+                    and not self._initial_pass
+                )
             ):
                 dist = distance(gps[0], gps[1], old_data.gps[0], old_data.gps[1])
                 if dist is not None and dist <= gps_accuracy + old_data.accuracy:
@@ -803,8 +816,18 @@ class CompositeDeviceTracker(TrackerEntity, RestoreEntity):
         speed = None
         angle = None
         use_new_speed = True
+        # Switching between a fallback and a primary input compares two devices
+        # that may be far apart: no speed from that.
+        prev_entity = self._entities.get(prev_ent) if prev_ent else None
+        new_entity = self._entities.get(cast(str, attributes[ATTR_LAST_ENTITY_ID]))
+        crosses_fallback = (
+            prev_entity is not None
+            and new_entity is not None
+            and prev_entity.fallback != new_entity.fallback
+        )
         if (
             prev_ent
+            and not crosses_fallback
             and self._prev_seen
             and prev_lat is not None
             and prev_lon is not None

@@ -30,6 +30,11 @@ Die Composite SHALL für jeden GPS-Eingang die letzte gültige Position mit Gena
 - **THEN** gilt das Telefon als frisch, und der Lückenfüller zählt nicht
 - Beleg: `tests/test_restore.py::test_restart_fallback_blocked_by_restored_primary`
 
+#### Scenario: Neustart, während ein Lückenfüller führt
+- **WHEN** vor dem Neustart ein Lückenfüller geführt hat und das Telefon seit Stunden schweigt
+- **THEN** bleibt die Composite nach dem Start beim Lückenfüller; der beim Start vorhandene Zustand des Telefons ist keine neue Meldung
+- Beleg: `tests/test_restore.py::test_restart_while_car_leads`
+
 #### Scenario: Altdaten ohne gespeicherten Stand
 - **WHEN** der gespeicherte Zustand aus einer Version ohne diese Daten stammt
 - **THEN** startet die Composite wie Upstream ohne Fehler
